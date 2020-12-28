@@ -15,7 +15,7 @@
 # It is mandatory for the job being called to have the $APT_CONFIG_FILE parameter
 #
 #  Examples:
-#  	sss_jjj_expnd.ksh -e dev -f testfile INSIGHT_DEV test
+#  	sss_jjj_expnd.ksh -e dev -f testfile projectname test
 #
 # Modification History
 #
@@ -71,8 +71,7 @@ for filename in `ls ${file_pattern}*`;
 do
 ErrString=`awk -F "|" -v filename="${filename}" '
 BEGIN { issue = "NO" }
-{if (( $1 == "H10" && NF != 9 ) || ( $1 == "D10" && NF != 3 ) || ( $1 == "D20" && NF != 6 ) || ( $1 == "S10" && NF != 2 ))
-issue="YES";}
+#Record Validation
 END{ print issue }' ${filename};`
 
 S10Flag=`awk -F "|" '
@@ -81,50 +80,7 @@ BEGIN{ flag=0 }
 END{ print flag }' ${filename};`
 
 if [ "$ErrString" == "YES" ]; then
-mv ${filename} ./BADFILES/
-sqlplus -s ${OID}/${OPSWD}<<ENDSQL
-set head off
-set linesize 400
-set pagesize 0 feedback off verify off  heading off echo off trimspool on colsep |
-INSERT INTO INSIGHT.INSGT_EXPND_ALRT_LOG (
-   ALRT_LOG_KEY, ALRT_KEY, ALRT_GRP, COL_DATA,
-    AUDT_INS_DT, AUDT_UPD_DT, 
-   SWEEP_IND, RVW_IND,ALRT_SRC) 
-VALUES ( INSIGHT.INSGT_ALRT_LOG_SEQ.NEXTVAL,
- 7,
- 'DLY',
- '${filename}',
-  SYSTIMESTAMP,
- SYSTIMESTAMP,
- 'Y',
- 'N',
- 'jjj');
- commit;
- /
-ENDSQL
-fi
-
-if [ "$S10Flag" == "1" ]; then
-sqlplus -s ${OID}/${OPSWD}<<ENDSQL
-set head off
-set linesize 400
-set pagesize 0 feedback off verify off  heading off echo off trimspool on colsep |
-INSERT INTO INSIGHT.INSGT_EXPND_ALRT_LOG (
-   ALRT_LOG_KEY, ALRT_KEY, ALRT_GRP, 
-      COL_DATA, AUDT_INS_DT, AUDT_UPD_DT, 
-   SWEEP_IND, RVW_IND, ALRT_SRC) 
-VALUES ( INSIGHT.INSGT_ALRT_LOG_SEQ.NEXTVAL,
- 3,
- 'DLY',
- '${filename}',
-  SYSTIMESTAMP,
- SYSTIMESTAMP,
- 'Y',
- 'Y',
- 'jjj');
- commit;
- /
-ENDSQL
+#Enter logic to handle errors
 fi
 
 done
@@ -259,12 +215,10 @@ CONFIG_FILE=`cat /.dshome`/../Configurations/default.apt
 #echo "BinFilsssrectory set to $BinFilsssrectory"
 if [ $FILEFLAG -eq 1 ]; then
 echo "File pattern passed to job - $FILEPATTERN"
-echo "Executing \n dsjob -run -mode NORMAL -wait -warn 0 -param '$APT_CONFIG_FILE'=${CONFIG_FILE} -param 'pattern='${FILEPATTERN} -param PX_INSIGHT_PS=${env}_INSIGHT_PS $DSPROJNAME $DSJOBNAME"
-dsjob -run -mode NORMAL -wait -warn 0 -param '$APT_CONFIG_FILE'=${CONFIG_FILE} -param 'pattern='${FILEPATTERN} -param PX_INSIGHT_PS=${env}_INSIGHT_PS $DSPROJNAME $DSJOBNAME
+dsjob -run -mode NORMAL -wait -warn 0 -param '$APT_CONFIG_FILE'=${CONFIG_FILE} -param 'pattern='${FILEPATTERN} -param parameterset=valuefile $DSPROJNAME $DSJOBNAME
 temprc=$?
 else
-echo "Executing \n dsjob -run -mode NORMAL -wait -warn 0 -param '$APT_CONFIG_FILE'=${CONFIG_FILE} -param PX_INSIGHT_PS=${env}_INSIGHT_PS $DSPROJNAME $DSJOBNAME"
-dsjob -run -mode NORMAL -wait -warn 0 -param '$APT_CONFIG_FILE'=${CONFIG_FILE} -param PX_INSIGHT_PS=${env}_INSIGHT_PS $DSPROJNAME $DSJOBNAME
+dsjob -run -mode NORMAL -wait -warn 0 -param '$APT_CONFIG_FILE'=${CONFIG_FILE} -param parameterset=valuefile $DSPROJNAME $DSJOBNAME
 temprc=$?
 fi
 echo ${temprc}
@@ -292,7 +246,7 @@ exit 0
 #############################################################################################################################
 SendMail()
 {
-       export mail_list="DL-InsightDWSupport@pfizer.com Haiou.Peng@pfizer.com jerome.rajan@pfizer.com jerrajan@deloitte.com vaibhav.gupta2@pfizer.com"     # for testing
+       export mail_list="emailids"     # for testing
 	   echo "Sending mail with subject ${env}:  sss jjj status: $1"
         mailx -s "${env}: $3 status: $1" "${mail_list}" < $2
 }
@@ -336,27 +290,26 @@ fi
 
 
 #  set datastage env vars
-EnvFilePath=/insight/${env}/scripts/insight_env.ksh
+EnvFilePath=#set environment file path
 . $EnvFilePath                                 
 . `cat /.dshome`/dsenv
 
 #  set insight env vars
-. .insight
+. .envfile
 
 #set -o xtrace
 export dt=`date '+%Y%m%d'`
 export tm=`date '+%H%M'`
 export dttm=`date '+%Y%m%d%H%M%S'`
-export log_dir="/insight/${env}/log/sssjjj"
-export ftp_dir="/insight/${env}/Data/sssjjj_EXPND"
-export data_dir="/insight/${env}/Data/Archive/sssjjj_EXPND"
+export log_dir=#set log dir path
+export ftp_dir=#set source data dir path
+export data_dir=##
 export dt_ctl='sss_jjj.dt'
 export status='Success'
 export mail_list=${inf_mail}
-export script_dir="/insight/${env}/scripts"
+export script_dir=#set path for script
 #Inf Upg Prema
 export dly_mail=${sssjjj_delay_mail}
-#'george.giaquinto@pfizer.com vincent.petitto@pfizer.com Teressa.G.Cannon@pfizer.com sumathi.vijayaraghavan@pfizer.com Syed.Hussaini@pfizer.com ralph.bolognese@pfizer.com myles.martin@pfizer.com'
 
 export lst_run_dt=`cat ${ctl_dir}/${dt_ctl} | cut -c1-8`
 export run_cnt=`cat ${ctl_dir}/${dt_ctl} | cut -c16`
